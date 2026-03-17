@@ -6,15 +6,24 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    env:
+      THEOS: ${{ github.workspace }}/theos
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: brew install ldid
+
       - name: Setup Theos
-        uses: kabiroberai/theos-action@v1
-        with:
-          sdk: "https://github.com/theos/sdks/releases/download/16.5/iPhoneOS16.5.sdk.tar.xz"
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+
+      - name: Download iOS SDK
+        run: |
+          curl --fail -L "https://github.com/theos/sdks/releases/download/16.5/iPhoneOS16.5.sdk.tar.xz" -o sdk.tar.xz
+          tar -xf sdk.tar.xz -C $THEOS/sdks/
 
       - name: Build
         run: make package FINALPACKAGE=1
