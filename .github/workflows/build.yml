@@ -1,35 +1,35 @@
-name: Build Tweak
+名称：构建调整: Build Tweak
 
-on:
-  push:
-    branches: [ main ]
+在：:
+  推送::
+    分支: [ main ]: [ main ]
 
-jobs:
-  build:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
+工作::
+  构建::
+    运行于: macos-latest: macos-latest
+    步骤：:
+      - 使用：actions/checkout@v4uses: actions/checkout@v4
 
-      - name: Setup Theos
-        uses: actions/checkout@v3
-        with:
-          repository: theos/theos
-          path: theos
-          submodules: recursive
+      - 名称: 配置 Theosname: Setup Theos
+        用途：actions/checkout@v4: actions/checkout@v4
+        与：:
+          仓库：theos/theos: theos/theos
+          路径：theos: theos
+          子模块：递归: recursive
 
-      - name: Set THEOS env
-        run: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+      - name: 设置 THEOS 环境变量name: Set THEOS env
+        运行: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
 
-      - name: Download iOS SDK
-        run: |
+      - 名称: 下载 iOS SDKname: Download iOS SDK
+        运行: |: |
           curl -LO https://github.com/theos/sdks/releases/download/universal/iPhoneOS16.5.sdk.tar.xz
           tar -xf iPhoneOS16.5.sdk.tar.xz -C $THEOS/sdks/
 
-      - name: Build
-        run: make package FINALPACKAGE=1
+      - 名称: 构建name: Build
+        运行：make package FINALPACKAGE=1: make package FINALPACKAGE=1
 
-      - name: Upload deb
-        uses: actions/upload-artifact@v3
-        with:
-          name: QiangDanAuto-deb
-          path: packages/*.deb
+      - 名称: 上传 debname: Upload deb
+        用途：actions/upload-artifact@v4: actions/upload-artifact@v4
+        与：:
+          名称：强淡自动扣款: QiangDanAuto-deb
+          路径: packages/*.deb: packages/*.deb
