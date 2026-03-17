@@ -9,6 +9,7 @@ jobs:
     runs-on: macos-latest
     env:
       THEOS: ${{ github.workspace }}/theos
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - uses: actions/checkout@v4
@@ -17,23 +18,14 @@ jobs:
         run: brew install ldid
 
       - name: Setup Theos
-        run: |
-          git clone --recursive https://github.com/theos/theos.git $THEOS
+        run: git clone --recursive https://github.com/theos/theos.git $THEOS
 
       - name: Download iOS SDK
         run: |
-          SDK_URL=$(curl -s "https://api.github.com/repos/theos/sdks/releases" \
-            | python3 -c "
-import sys, json
-releases = json.load(sys.stdin)
-for r in releases:
-    for a in r['assets']:
-        if 'iPhoneOS16.5' in a['name']:
-            print(a['browser_download_url'])
-            exit()
-")
-          echo "Downloading: $SDK_URL"
-          curl --fail -L "$SDK_URL" -o sdk.tar.xz
+          gh release download \
+            --repo theos/sdks \
+            --pattern "iPhoneOS16.5.sdk.tar.xz" \
+            --output sdk.tar.xz
           tar -xf sdk.tar.xz -C $THEOS/sdks/
 
       - name: Build
