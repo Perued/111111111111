@@ -22,8 +22,8 @@ jobs:
 
       - name: Download iOS SDK
         run: |
-          curl -LO https://github.com/theos/sdks/releases/download/universal/iPhoneOS16.5.sdk.tar.xz
-          tar -xf iPhoneOS16.5.sdk.tar.xz -C $THEOS/sdks/
+          curl -L https://github.com/theos/sdks/releases/latest/download/sdks.tar.xz -o sdks.tar.xz
+          tar -xf sdks.tar.xz -C $THEOS/sdks/
 
       - name: Build
         run: make package FINALPACKAGE=1
