@@ -6,24 +6,15 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
-    env:
-      THEOS: ${{ github.workspace }}/theos
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Theos
-        uses: actions/checkout@v4
+        uses: kabiroberai/theos-action@v1
         with:
-          repository: theos/theos
-          path: theos
-          submodules: recursive
-
-      - name: Download iOS SDK
-        run: |
-          curl -L https://github.com/theos/sdks/releases/latest/download/sdks.tar.xz -o sdks.tar.xz
-          tar -xf sdks.tar.xz -C $THEOS/sdks/
+          sdk: "https://github.com/theos/sdks/releases/download/16.5/iPhoneOS16.5.sdk.tar.xz"
 
       - name: Build
         run: make package FINALPACKAGE=1
