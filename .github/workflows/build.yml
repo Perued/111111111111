@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      THEOS: ${{ github.workspace }}/theos
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,9 +19,6 @@ jobs:
           repository: theos/theos
           path: theos
           submodules: recursive
-
-      - name: Set THEOS env
-        run: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
 
       - name: Download iOS SDK
         run: |
