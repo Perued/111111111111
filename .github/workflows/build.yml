@@ -1,35 +1,35 @@
-名称：构建调整: Build Tweak
+名称：构建调整：构建调整
 
 在：:
   推送::
-    分支: [ main ]: [ main ]
+    分支: [ 主 ]
 
-工作::
-  构建::
-    运行于: macos-latest: macos-latest
-    步骤：:
-      - 使用：actions/checkout@v4uses: actions/checkout@v4
+工作：：
+  构建:：
+    运行于：macos-latestacos-latest：macos-latest
+    步骤：：
+      - 使用：actions/checkout@v4使用： actions/checkout@v4
 
-      - 名称: 配置 Theosname: Setup Theos
-        用途：actions/checkout@v4: actions/checkout@v4
-        与：:
-          仓库：theos/theos: theos/theos
-          路径：theos: theos
-          子模块：递归: recursive
+      - 名称: 配置 Theosname置 Theosname: 设置 Theos
+        用途：actions/checkout@v4： actions/checkout@v4
+        与：：
+          仓库：theos/theos： theos/theos
+          路径：theos： theos
+          子模块：递归： 递归
 
-      - name: 设置 THEOS 环境变量name: Set THEOS env
-        运行: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV: echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+      - 名称: 设置 THEOS 环境变量名称置 THEOS 环境变量name: 设置 THEOS 环境变量
+        运行：echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV：echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
 
-      - 名称: 下载 iOS SDKname: Download iOS SDK
-        运行: |: |
-          curl -LO https://github.com/theos/sdks/releases/download/universal/iPhoneOS16.5.sdk.tar.xz
+      - 名称: 下载 iOS SDK名称: 下载 iOS SDK
+        运行：|：|
+|
           tar -xf iPhoneOS16.5.sdk.tar.xz -C $THEOS/sdks/
 
-      - 名称: 构建name: Build
-        运行：make package FINALPACKAGE=1: make package FINALPACKAGE=1
+      - 名称: 构建名称: 构建
+        运行：make package FINALPACKAGE=1： make package FINALPACKAGE=1
 
-      - 名称: 上传 debname: Upload deb
-        用途：actions/upload-artifact@v4: actions/upload-artifact@v4
-        与：:
-          名称：强淡自动扣款: QiangDanAuto-deb
-          路径: packages/*.deb: packages/*.deb
+      - 名称: 上传 debname: 上传 deb 文件
+        用途：actions/upload-artifact@v4： actions/upload-artifact@v4
+        与：：
+          名称：强淡自动扣款： 强淡自动扣款
+          路径：packages/*.debackages/*.deb：packages/*.deb
