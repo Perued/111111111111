@@ -1,36 +1,33 @@
 #import <Foundation/Foundation.h>
 
-// 1. 获取沙盒 Documents 目录路径
-static NSString *getDocumentDirectory() {
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    return paths.firstObject;
+// ==========================================
+// 1. 文件路径获取
+// ==========================================
+static NSString *getConfigPlistPath() {
+    NSString *docDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    return [docDir stringByAppendingPathComponent:@"InterceptConfig.plist"];
 }
 
-// 2. 配置文件和日志文件的具体路径
-static NSString *getConfigFile() {
-    return [getDocumentDirectory() stringByAppendingPathComponent:@"TargetDomains.json"];
+static NSString *getLogFilePath() {
+    NSString *docDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    return [docDir stringByAppendingPathComponent:@"InterceptLog.txt"];
 }
 
-static NSString *getLogFile() {
-    return [getDocumentDirectory() stringByAppendingPathComponent:@"InterceptLog.txt"];
-}
-
-// 3. 写入拦截日志 (追加模式)
-static void logInterceptedURL(NSString *urlStr) {
-    NSString *logPath = getLogFile();
+// ==========================================
+// 2. 日志写入模块
+// ==========================================
+static void writeToLogFile(NSString *urlStr) {
+    NSString *logPath = getLogFilePath();
     
-    // 格式化当前时间
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
     NSString *timeStr = [formatter stringFromDate:[NSDate date]];
     
-    NSString *logMsg = [NSString stringWithFormat:@"[%@] 成功拦截: %@\n", timeStr, urlStr];
+    NSString *logMsg = [NSString stringWithFormat:@"[%@] 动态拦截: %@\n", timeStr, urlStr];
     
-    // 如果日志文件不存在，先创建
     if (![[NSFileManager defaultManager] fileExistsAtPath:logPath]) {
         [logMsg writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     } else {
-        // 追加写入
         NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:logPath];
         [handle seekToEndOfFile];
         [handle writeData:[logMsg dataUsingEncoding:NSUTF8StringEncoding]];
@@ -38,85 +35,71 @@ static void logInterceptedURL(NSString *urlStr) {
     }
 }
 
-// 4. 读取 JSON 配置文件中的动态域名列表
-static NSArray* getDynamicDomains() {
-    NSString *configPath = getConfigFile();
-    NSData *data = [NSData dataWithContentsOfFile:configPath];
-    if (data) {
-        NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        if (dict && [dict isKindOfClass:[NSDictionary class]]) {
-            NSArray *domains = dict[@"domains"];
-            if ([domains isKindOfClass:[NSArray class]]) {
-                return domains;
-            }
-        }
-    }
-    return @[];
-}
 // ==========================================
-// 可变请求层 (NSMutableURLRequest)
+// 3. 集中式 URL 处理器 (所有拦截逻辑都在这里)
 // ==========================================
-%hook NSMutableURLRequest
-
-- (void)setURL:(NSURL *)URL {
-    if (URL) {
-        NSString *urlStr = URL.absoluteString;
+static NSURL* processAndCleanURL(NSURL *originalURL) {
+    if (!originalURL) return originalURL;
+    NSString *urlStr = originalURL.absoluteString;
+    if (urlStr.length == 0) return originalURL;
+    
+    // 【第一关：读取 Plist，动态拦截特定域名】
+    NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:getConfigPlistPath()];
+    if (config) {
+        NSArray *domains = config[@"TargetDomains"];
+        BOOL enableLogging = [config[@"EnableLogging"] boolValue]; // 读取日志开关
         
-        // 【新增】1. 动态配置文件拦截逻辑
-        BOOL isDynamicIntercepted = NO;
-        NSArray *dynamicDomains = getDynamicDomains();
-        for (NSString *domain in dynamicDomains) {
-            // 如果读取到的域名不是空，且当前 URL 包含了这个域名
-            if (domain.length > 0 && [urlStr containsString:domain]) {
-                // 记录到日志文件
-                logInterceptedURL(urlStr);
-                // 路由到特定黑洞
-                URL = [NSURL URLWithString:@"http://127.0.0.1/blackhole_dynamic_custom"];
-                isDynamicIntercepted = YES;
-                break; // 拦截成功，跳出循环
-            }
-        }
-        
-        // 2. 如果没有被动态拦截，走原本的逻辑
-        if (!isDynamicIntercepted) {
-            if ([urlStr containsString:@"dda_gray_page_control"] || [urlStr containsString:@"gray_page_control"]) {
-                URL = [NSURL URLWithString:@"http://127.0.0.1/blackhole_investigate"];
-            } else if ([urlStr containsString:@"log.imdada"] || [urlStr containsString:@"apm"] || [urlStr containsString:@"crash"] || [urlStr containsString:@"trace"]) {
-                URL = [NSURL URLWithString:@"http://127.0.0.1/blackhole_apm"];
-            } else if ([urlStr containsString:@"color.imdada.cn"]) {
-                NSError *error = nil;
-                NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"([?&])(?:eid|sign|hdid)=[^&]*" 
-                                                                                       options:NSRegularExpressionCaseInsensitive 
-                                                                                         error:&error];
-                if (!error) {
-                    urlStr = [regex stringByReplacingMatchesInString:urlStr options:0 range:NSMakeRange(0, urlStr.length) withTemplate:@"$1"];
-                    urlStr = [urlStr stringByReplacingOccurrencesOfString:@"&&" withString:@"&"];
-                    urlStr = [urlStr stringByReplacingOccurrencesOfString:@"?&" withString:@"?"];
-                    if ([urlStr hasSuffix:@"?"] || [urlStr hasSuffix:@"&"]) {
-                        urlStr = [urlStr substringToIndex:urlStr.length - 1];
+        if ([domains isKindOfClass:[NSArray class]]) {
+            for (NSString *domain in domains) {
+                if (domain.length > 0 && [urlStr containsString:domain]) {
+                    // 如果开启了日志记录，才写入日志
+                    if (enableLogging) {
+                        writeToLogFile(urlStr);
                     }
-                    URL = [NSURL URLWithString:urlStr];
+                    return [NSURL URLWithString:@"http://127.0.0.1/blackhole_dynamic_plist"];
                 }
             }
         }
     }
-    %orig(URL);
-}
+    
 
-%end
-// 5. 初始化：如果配置不存在，生成默认配置模板
+
+// ==========================================
+// 4. 插件初始化：如果配置不存在，自动生成 Plist
+// ==========================================
 %ctor {
-    NSString *configPath = getConfigFile();
-    NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm fileExistsAtPath:configPath]) {
-        // 默认模板，你可以随意加
+    NSString *plistPath = getConfigPlistPath();
+    if (![[NSFileManager defaultManager] fileExistsAtPath:plistPath]) {
         NSDictionary *defaultConfig = @{
-            @"domains": @[
+            @"EnableLogging": @(YES),  // 默认打开日志记录
+            @"TargetDomains": @[
                 @"test-ad-domain.com",
                 @"example-track.cn"
             ]
         };
-        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:defaultConfig options:NSJSONWritingPrettyPrinted error:nil];
-        [jsonData writeToFile:configPath atomically:YES];
+        [defaultConfig writeToFile:plistPath atomically:YES];
     }
 }
+
+// ==========================================
+// 5. Hooks: 极简拦截器 (直接调用上方处理器)
+// ==========================================
+
+%hook NSMutableURLRequest
+- (void)setURL:(NSURL *)URL {
+    %orig(processAndCleanURL(URL));
+}
+%end
+
+%hook NSURLRequest
++ (instancetype)requestWithURL:(NSURL *)URL {
+    return %orig(processAndCleanURL(URL));
+}
+- (instancetype)initWithURL:(NSURL *)URL {
+    return %orig(processAndCleanURL(URL));
+}
+- (instancetype)initWithURL:(NSURL *)URL cachePolicy:(NSURLRequestCachePolicy)cachePolicy timeoutInterval:(NSTimeInterval)timeoutInterval {
+    return %orig(processAndCleanURL(URL), cachePolicy, timeoutInterval);
+}
+%end
+
