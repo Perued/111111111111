@@ -1,7 +1,7 @@
 #import <Foundation/Foundation.h>
 
 // ==========================================
-// 1. 文件路径获取
+// 1. 获取沙盒路径 (配置文件与日志文件)
 // ==========================================
 static NSString *getConfigPlistPath() {
     NSString *docDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -23,7 +23,7 @@ static void writeToLogFile(NSString *urlStr) {
     [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
     NSString *timeStr = [formatter stringFromDate:[NSDate date]];
     
-    NSString *logMsg = [NSString stringWithFormat:@"[%@] 动态拦截: %@\n", timeStr, urlStr];
+    NSString *logMsg = [NSString stringWithFormat:@"[%@] 拦截触发: %@\n", timeStr, urlStr];
     
     if (![[NSFileManager defaultManager] fileExistsAtPath:logPath]) {
         [logMsg writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
@@ -36,14 +36,14 @@ static void writeToLogFile(NSString *urlStr) {
 }
 
 // ==========================================
-// 3. 集中式 URL 处理器 (所有拦截逻辑都在这里)
+// 3. 核心拦截器 (仅保留 Plist 配置匹配)
 // ==========================================
-static NSURL* processAndCleanURL(NSURL *originalURL) {
+static NSURL* processURL(NSURL *originalURL) {
     if (!originalURL) return originalURL;
     NSString *urlStr = originalURL.absoluteString;
     if (urlStr.length == 0) return originalURL;
     
-    // 【第一关：读取 Plist，动态拦截特定域名】
+    // 读取 Plist 配置文件
     NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:getConfigPlistPath()];
     if (config) {
         NSArray *domains = config[@"TargetDomains"];
@@ -51,21 +51,25 @@ static NSURL* processAndCleanURL(NSURL *originalURL) {
         
         if ([domains isKindOfClass:[NSArray class]]) {
             for (NSString *domain in domains) {
+                // 如果当前 URL 包含了 Plist 中配置的任意域名/关键字
                 if (domain.length > 0 && [urlStr containsString:domain]) {
-                    // 如果开启了日志记录，才写入日志
+                    // 如果开关开启，则记录日志
                     if (enableLogging) {
                         writeToLogFile(urlStr);
                     }
+                    // 命中拦截，导向黑洞
                     return [NSURL URLWithString:@"http://127.0.0.1/blackhole_dynamic_plist"];
                 }
             }
         }
     }
     
-
+    // 未命中拦截列表，放行原请求
+    return originalURL;
+}
 
 // ==========================================
-// 4. 插件初始化：如果配置不存在，自动生成 Plist
+// 4. 插件初始化：自动生成默认 Plist
 // ==========================================
 %ctor {
     NSString *plistPath = getConfigPlistPath();
@@ -82,24 +86,23 @@ static NSURL* processAndCleanURL(NSURL *originalURL) {
 }
 
 // ==========================================
-// 5. Hooks: 极简拦截器 (直接调用上方处理器)
+// 5. 网络请求 Hook 层
 // ==========================================
 
 %hook NSMutableURLRequest
 - (void)setURL:(NSURL *)URL {
-    %orig(processAndCleanURL(URL));
+    %orig(processURL(URL));
 }
 %end
 
 %hook NSURLRequest
 + (instancetype)requestWithURL:(NSURL *)URL {
-    return %orig(processAndCleanURL(URL));
+    return %orig(processURL(URL));
 }
 - (instancetype)initWithURL:(NSURL *)URL {
-    return %orig(processAndCleanURL(URL));
+    return %orig(processURL(URL));
 }
 - (instancetype)initWithURL:(NSURL *)URL cachePolicy:(NSURLRequestCachePolicy)cachePolicy timeoutInterval:(NSTimeInterval)timeoutInterval {
-    return %orig(processAndCleanURL(URL), cachePolicy, timeoutInterval);
+    return %orig(processURL(URL), cachePolicy, timeoutInterval);
 }
 %end
-
