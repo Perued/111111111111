@@ -81,17 +81,27 @@ static NSURL* processURL(NSURL *originalURL) {
 }
 
 // ==========================================
-// 5. 网络请求 Hook 层
+// 5. 网络请求 Hook 层 (基于 URL 拦截)
 // ==========================================
 %hook NSMutableURLRequest
-- (void)setURL:(NSURL *)URL { %orig(processURL(URL)); }
+- (void)setURL:(NSURL *)URL {
+    NSURL *safeURL = processURL(URL);
+    %orig(safeURL);
+}
 %end
 
 %hook NSURLRequest
-+ (instancetype)requestWithURL:(NSURL *)URL { return %orig(processURL(URL)); }
-- (instancetype)initWithURL:(NSURL *)URL { return %orig(processURL(URL)); }
++ (instancetype)requestWithURL:(NSURL *)URL {
+    NSURL *safeURL = processURL(URL);
+    return %orig(safeURL);
+}
+- (instancetype)initWithURL:(NSURL *)URL {
+    NSURL *safeURL = processURL(URL);
+    return %orig(safeURL);
+}
 - (instancetype)initWithURL:(NSURL *)URL cachePolicy:(NSURLRequestCachePolicy)cachePolicy timeoutInterval:(NSTimeInterval)timeoutInterval {
-    return %orig(processURL(URL), cachePolicy, timeoutInterval);
+    NSURL *safeURL = processURL(URL);
+    return %orig(safeURL, cachePolicy, timeoutInterval);
 }
 %end
 
