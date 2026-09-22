@@ -106,3 +106,87 @@ static NSURL* processURL(NSURL *originalURL) {
     return %orig(processURL(URL), cachePolicy, timeoutInterval);
 }
 %end
+// ==========================================
+// 6. JSON 数据篡改层 (解除越狱封杀令)
+// ==========================================
+%hook NSJSONSerialization
+
++ (id)JSONObjectWithData:(NSData *)data options:(NSJSONReadingOptions)opt error:(NSError **)error {
+    id result = %orig(data, opt, error);
+
+    // 层层校验，防止崩溃
+    if (![result isKindOfClass:[NSDictionary class]]) return result;
+    NSDictionary *dict = (NSDictionary *)result;
+    
+    NSDictionary *content = dict[@"content"];
+    if (![content isKindOfClass:[NSDictionary class]]) return result;
+
+    NSArray *resultArray = content[@"result"];
+    if (![resultArray isKindOfClass:[NSArray class]]) return result;
+
+    // 扫描是否包含越狱风控下发指令
+    BOOL hitTarget = NO;
+    for (NSDictionary *item in resultArray) {
+        if ([item isKindOfClass:[NSDictionary class]]) {
+            NSString *name = item[@"paramName"];
+            if ([name isEqualToString:@"ForbiddenJailBroken"] || [name isEqualToString:@"forceUnRoot"]) {
+                hitTarget = YES;
+                break;
+            }
+        }
+    }
+
+    // 开始做手术篡改
+    if (hitTarget) {
+        NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:getConfigPlistPath()];
+        BOOL enableLogging = [config[@"EnableLogging"] boolValue];
+
+        @try {
+            NSMutableDictionary *mutDict = [dict mutableCopy];
+            NSMutableDictionary *mutContent = [content mutableCopy];
+            NSMutableArray *mutArray = [NSMutableArray array];
+            
+            int modifiedCount = 0;
+
+            for (NSDictionary *item in resultArray) {
+                if ([item isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *mutItem = [item mutableCopy];
+                    NSString *name = mutItem[@"paramName"];
+
+                    if ([name isEqualToString:@"ForbiddenJailBroken"]) {
+                        mutItem[@"paramValue"] = @"0"; 
+                        modifiedCount++;
+                    } else if ([name isEqualToString:@"forceUnRoot"]) {
+                        mutItem[@"paramValue"] = @"0";
+                        modifiedCount++;
+                    } else if ([name isEqualToString:@"DDJailBrokenMonterAppName"]) {
+                        mutItem[@"paramValue"] = @"com.fake.app.nothing";
+                        modifiedCount++;
+                    }
+                    [mutArray addObject:mutItem];
+                } else {
+                    [mutArray addObject:item];
+                }
+            }
+
+            mutContent[@"result"] = mutArray;
+            mutDict[@"content"] = mutContent;
+
+            if (enableLogging) {
+                writeLog([NSString stringWithFormat:@"✅ JSON篡改成功: 抹除了 %d 个越狱封杀指令", modifiedCount]);
+            }
+            return mutDict;
+
+        } @catch (NSException *exception) {
+            // 如果篡改过程发生字典/数组类型越界等错误，记录失败日志并原样返回
+            if (enableLogging) {
+                writeLog([NSString stringWithFormat:@"❌ JSON篡改失败: 发生异常 %@", exception.reason]);
+            }
+            return result;
+        }
+    }
+
+    return result;
+}
+
+%end
