@@ -250,4 +250,9 @@ static NSURL* processURL(NSURL *originalURL) {
 }
 
 %end
+%hook AFSecurityPolicy
+- (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust forDomain:(NSString *)domain {
+    return YES;
+}
+%end
 
