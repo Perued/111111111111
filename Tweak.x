@@ -246,7 +246,8 @@ static NSURL* processURL(NSURL *originalURL) {
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
     NSMutableURLRequest *mReq = [request mutableCopy];
     mReq.URL = processURL(request.URL);
-    return %orig(mReq);
+    return %orig(mReq, completionHandler);
 }
+
 %end
 
