@@ -229,45 +229,9 @@ static NSURL* processURL(NSURL *originalURL) {
 }
 %end
 
-%hook NSURLSession
-// 补：dataTaskWithURL: 系列直接拿 NSURL 建 task，不经过 NSURLRequest，
-// 之前 processURL 根本看不到这些 URL —— 这是最可能的漏网路径
-- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url {
-    return %orig(processURL(url));
+%hook HttpDNSManager
+- (BOOL)useHttpDNS {
+    return NO;
 }
-- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
-    return %orig(processURL(url), completionHandler);
-}
-// 二次保险：经由 NSURLRequest 的 task 在这里再过一遍（幂等，已替换的不受影响）
-- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
-    NSMutableURLRequest *mReq = [request mutableCopy];
-    mReq.URL = processURL(request.URL);
-    return %orig(mReq);
-}
-- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
-    NSMutableURLRequest *mReq = [request mutableCopy];
-    mReq.URL = processURL(request.URL);
-    return %orig(mReq, completionHandler);
-}
+%end
 
-%end
-%hook AFSecurityPolicy
-- (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust forDomain:(NSString *)domain {
-    return YES;
-}
-%end
-// 京东 JDJR 自己的 pinning（反编译确认 imp 0x104260e54）
-%hook JDJRSecurityPolicy
-- (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust forDomain:(NSString *)domain {
-return YES;
-}
-%end
-// 兜底：C 层（覆盖 Alamofire 等 Swift 实现）
-%hookf(OSStatus, SecTrustEvaluate, SecTrustRef trust, SecTrustResultType *result) {
-if (result) *result = kSecTrustResultProceed;
-return errSecSuccess;
-}
-%hookf(Boolean, SecTrustEvaluateWithError, SecTrustRef trust, CFErrorRef *error) {
-if (error) *error = NULL;
-return true;
-}
