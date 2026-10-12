@@ -216,3 +216,37 @@ static NSURL* processURL(NSURL *originalURL) {
 }
 
 %end
+// ==========================================
+// 7. 补丁：覆盖漏掉的请求创建路径（加法，原代码不动）
+// ==========================================
+
+%hook NSURLRequest
+// 补：之前只 hook 了 +requestWithURL:，这个带参数的类方法漏了
++ (instancetype)requestWithURL:(NSURL *)URL cachePolicy:(NSURLRequestCachePolicy)cachePolicy timeoutInterval:(NSTimeInterval)timeoutInterval {
+    NSURL *safeURL = processURL(URL);
+    return %orig(safeURL, cachePolicy, timeoutInterval);
+}
+%end
+
+%hook NSURLSession
+// 补：dataTaskWithURL: 系列直接拿 NSURL 建 task，不经过 NSURLRequest，
+// 之前 processURL 根本看不到这些 URL —— 这是最可能的漏网路径
+- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url {
+    return %orig(processURL(url));
+}
+- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
+    return %orig(processURL(url), completionHandler);
+}
+// 二次保险：经由 NSURLRequest 的 task 在这里再过一遍（幂等，已替换的不受影响）
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
+    NSMutableURLRequest *mReq = [request mutableCopy];
+    mReq.URL = processURL(request.URL);
+    return %orig(mReq);
+}
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
+    NSMutableURLRequest *mReq = [request mutableCopy];
+    mReq.URL = processURL(request.URL);
+    return %orig(mReq);
+}
+%end
+
