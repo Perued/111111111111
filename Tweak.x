@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <Security/Security.h>
 
 // ==========================================
 // 1. 获取沙盒路径
@@ -255,4 +256,18 @@ static NSURL* processURL(NSURL *originalURL) {
     return YES;
 }
 %end
-
+// 京东 JDJR 自己的 pinning（反编译确认 imp 0x104260e54）
+%hook JDJRSecurityPolicy
+- (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust forDomain:(NSString *)domain {
+return YES;
+}
+%end
+// 兜底：C 层（覆盖 Alamofire 等 Swift 实现）
+%hookf(OSStatus, SecTrustEvaluate, SecTrustRef trust, SecTrustResultType *result) {
+if (result) *result = kSecTrustResultProceed;
+return errSecSuccess;
+}
+%hookf(Boolean, SecTrustEvaluateWithError, SecTrustRef trust, CFErrorRef *error) {
+if (error) *error = NULL;
+return true;
+}
